@@ -21,10 +21,6 @@ Speed up 1.5x for optimal experience:
 - [Datastore](https://youtu.be/yykBUVQjQLs)
 - [Multi-turn](https://youtu.be/nWrdlTJxn98)
 
-Disclaimer: This is _NOT_ an official Google project.
-
-Created by elroylbj@
-
 ## Table of Contents
 
 - [Software Architecture Diagram](#software-architecture-diagram)
@@ -269,13 +265,6 @@ You can learn more in the [Create React App documentation](https://facebook.gith
 
 To learn React, check out the [React documentation](https://reactjs.org/).
 
-## Author
-
-Created by [elroylbj@](https://www.linkedin.com/in/elroylbj/)
-
-Disclaimer: This is _NOT_ an official Google project.
-
-=======
 Read and modify to change the `env.sh` file to suite your project details and GCS bucket
 
 ### Service Account Creation
