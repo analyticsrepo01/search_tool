@@ -1,8 +1,29 @@
-### Deployment Commands
+# Cymbal Search
 
-<<<<<<< HEAD
+### A [Vertex AI Search](https://cloud.google.com/generative-ai-app-builder?hl=en) Demo
 
-### Vertex AI Search (RAG) Demo
+- Try it here -> https://www.cymbalsearch.com (Controlled access)
+- Bug sheet -> [go/cymbalsearch](https://docs.google.com/spreadsheets/d/1DrLq4csxe5kYvtIJh9u-iBsxmbU-5-qsO5Urcs-Pn7M/edit?usp=sharing)
+
+<!-- <figure class="video_container">
+  <video controls="true" allowfullscreen="true" poster="path/to/poster_image.png">
+    <source src="Search.webm" type="video/webm">
+  </video>
+</figure> -->
+
+### Video Walkthrough
+
+![alt text](public/CybalSearchScreenshot-1.png)
+
+Speed up 1.5x for optimal experience:
+
+- [Search](https://www.youtube.com/watch?v=9uqgSKSuYFc)
+- [Datastore](https://youtu.be/yykBUVQjQLs)
+- [Multi-turn](https://youtu.be/nWrdlTJxn98)
+
+Disclaimer: This is _NOT_ an official Google project.
+
+Created by elroylbj@
 
 ## Table of Contents
 
@@ -25,43 +46,51 @@ You need to set up a Google Cloud Project with a Vertex AI Search app (unstructu
 ### 1. Google Cloud Project
 
 1. Create a [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects) if you don't already have one.
+2. Open the cloud shell and enter the following command
+   ```
+   git clone https://github.com/analyticsrepo01/search_tool.git
+   ``` 
+   ```
+   cd cymbal-search-demo-main
+   ```
 
 ### 2. Vertex AI Search App
 
 Create a Vertex AI Search with unstructured datastore with defined metadata.
 
-1. Go to [Search & Conversation](https://console.cloud.google.com/gen-app-builder/engines) page and enable the api if prompted
-2. Select `Search`
-3. At Configuration,
+1. Go to [Agent Builder](https://console.cloud.google.com/gen-app-builder/engines) page and enable the api if prompted
+2. Select 'Create app'
+3. Select `Search`
+4. At Configuration,
    1. Enable all features
    2. Set your App Name
    3. Set location as global
    4. Click `CONTINUE`
-4. Create a new data store - select `Cloud Storage`
-5. Create a new bucket in Cloud Storage called alphabet-public
-6. Upload the alpha-metadata.json file in the root directory provided in this repository to the bucket root
-7. At Data import, we will load a set of public PDFs using a JSON file:
+5. Create a new data store - select `Cloud Storage`
+6. Create a new bucket in Cloud Storage called alphabet-public
+7. Upload the alpha-metadata.json file in the root directory provided in this repository to the bucket root
+8. At Data import, we will load a set of public PDFs using a JSON file:
    1. Select `FILE`
-   2. In the gs:// textbox, select the file you uploaded in the Step 6
-   3. Select `JSON for unstructured documents with metadata`
+   2. In the gs:// textbox, input `cymbalsearch-alphabet-public/metadata/metadata.json`
+   3. Select `Linked unstructured documents (JSONL with metadata)`
    4. Click `CONTINUE`
-8. Give your data store a name and click `CREATE` (wait a few seconds for datastore to create)
-9. Select your newly-created data store and click `CREATE` to create app
-10. After around 10 minutes, the import status should show "Import completed".
-11. Congratulations! Play around with the app in the Preview and Configurations tabs in the console.
+9. Give your data store a name and click `CREATE` (wait a few seconds for datastore to create)
+10. Select your newly-created data store and click `CREATE` to create app
+11. After around 10 minutes, the import status should show "Import completed".
+12. Congratulations! Play around with the app in the Preview and Configurations tabs in the console.
 
 ### 3. Google Cloud Storage
 
 Create a bucket to be used for uploading of new documents using the UI.
 
-1. [Create a GCS bucket](https://cloud.google.com/storage/docs/creating-buckets#create_a_new_bucket) either in console or run this gcloud command in Cloud Shell:
+1. [Create a GCS bucket](https://cloud.google.com/storage/docs/creating-buckets#create_a_new_bucket) either in console or run this gcloud command in Cloud Shell after replacing the bucket name:
    ```
    export BUCKET_FOR_UPLOAD=$BUCKET_NAME
    ```
    ```
    gcloud storage buckets create gs://$BUCKET_FOR_UPLOAD
    ```
-1. [Configure CORS](https://cloud.google.com/storage/docs/cors-configurations#command-line) for your bucket.
+2. [Configure CORS](https://cloud.google.com/storage/docs/cors-configurations#command-line) for your bucket.
    ```
    echo '[{"origin": ["*"], "method": ["GET"], "responseHeader": ["Content-Type"],"maxAgeSeconds": 3600}]' > cors.json
    ```
@@ -76,10 +105,10 @@ However, if you would like to run them locally, set up [Application Default Cred
 
 ### 1. Clone this project repository
 
-Run the following in your local terminal
+Follow [this guide](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) to create your personal access token. Then substitute the <token_name> and <token_value> below and run the command to clone the repository.
 
 ```
-git clone https://gitlab.com/google-cloud-ce/googlers/kkrish/cymbal-search-demo-2024
+git clone https://<token_name>:<token_value>@gitlab.com/google-cloud-ce/googlers/elroylbj/cymbal-search.git
 ```
 
 ### 2. Set environment variables
@@ -89,17 +118,13 @@ Please replace these with your project details:
 - Add `ENGINE_2` and `ENGINE_3` if you want more apps.
 - Leave `MODEL_1` and `MODEL_2` values unchanged if there are no changes to the PaLM models.
 
-Sample values has been provided as an example in env.sh in the root directory of this project
-
 ```
 export PROJECT_ID="PROJECT_ID"
 export BUCKET_FOR_UPLOAD="BUCKET_NAME"
 export ENGINE_1="VERTEX_AI_SEARCH_DATASTORE_ID"
-export MODEL_1="gemini-pro"
-export MODEL_2="text-bison@002"
+export MODEL_1="text-bison"
+export MODEL_2="text-bison-32k"
 ```
-
-Also, for the service account created in the previous step, ensure to download a JSON key and place the same as <code>key.json</code> in your root directory of this project
 
 Set deployment details (leave the default values at your convenience):
 
@@ -119,16 +144,9 @@ export TAG=1.0
 
 ### 3. Enable APIs, create Service Account and push Docker image to Artifact Registry
 
-Firstly, ensure you are in the root directory of the repository.
+Firstly, ensure you are in the root directory of the repository, next, run the script below:
 
 ```
-cd cymbal-search/
-```
-
-Next, run the script below:
-
-```
-chmod +x deploy.sh
 ./deploy.sh
 ```
 
@@ -255,6 +273,34 @@ To learn React, check out the [React documentation](https://reactjs.org/).
 
 Created by [elroylbj@](https://www.linkedin.com/in/elroylbj/)
 
-Modified by [kkrish@](https://www.linkedin.com/in/krishnan-kumar-19982b104/)
-
 Disclaimer: This is _NOT_ an official Google project.
+
+=======
+Read and modify to change the `env.sh` file to suite your project details and GCS bucket
+
+### Service Account Creation
+
+Create a service account key and store in the root directory of this project and name it `key.json`
+
+#### Build the container
+
+docker build --platform linux/amd64 -t <container_name> .
+
+`--platform` flag is provided to avoid compatibility issues when building container images on apple silicons
+
+#### Tag docker container image (repository name is the name of the repository created on Google Cloud Artifact Registry)
+
+docker tag `<container_name>` us-docker.pkg.dev/`<project_name>`/`<repository_name>`/`<conainer_name>:<container_tag>`
+
+#### Push container image to artifact registry
+
+docker push us-docker.pkg.dev/`<project_name>`/`<repository_name>`/`<conainer_name>:<container_tag>`
+
+### Cloud Run for deployment
+
+- Go to cloud run inside Google Cloud
+- Create a cloud run instance
+- Select the artifact registry & ensure to select the latest version of the container image
+- Leave the options to default and ensure to allow Unauthenticated access (public url if necessary)
+- Use the Cloud Run public URL generated
+  > > > > > > > b583e5175b824df4c235e50734b88689aa72b4d7
