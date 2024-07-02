@@ -101,10 +101,10 @@ However, if you would like to run them locally, set up [Application Default Cred
 
 ### 1. Clone this project repository
 
-Follow [this guide](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) to create your personal access token. Then substitute the <token_name> and <token_value> below and run the command to clone the repository.
+Run the following in your local terminal
 
 ```
-git clone https://<token_name>:<token_value>@gitlab.com/google-cloud-ce/googlers/elroylbj/cymbal-search.git
+git clone https://github.com/analyticsrepo01/search_tool.git
 ```
 
 ### 2. Set environment variables
