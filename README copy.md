@@ -46,41 +46,51 @@ You need to set up a Google Cloud Project with a Vertex AI Search app (unstructu
 ### 1. Google Cloud Project
 
 1. Create a [Google Cloud project](https://cloud.google.com/resource-manager/docs/creating-managing-projects) if you don't already have one.
+2. Open the cloud shell and enter the following command
+   ```
+   git clone https://github.com/analyticsrepo01/search_tool.git
+   ``` 
+   ```
+   cd cymbal-search-demo-main
+   ```
 
 ### 2. Vertex AI Search App
 
 Create a Vertex AI Search with unstructured datastore with defined metadata.
 
-1. Go to [Search & Conversation](https://console.cloud.google.com/gen-app-builder/engines) page and enable the api if prompted
-2. Select `Search`
-3. At Configuration,
+1. Go to [Agent Builder](https://console.cloud.google.com/gen-app-builder/engines) page and enable the api if prompted
+2. Select 'Create app'
+3. Select `Search`
+4. At Configuration,
    1. Enable all features
    2. Set your App Name
    3. Set location as global
    4. Click `CONTINUE`
-4. Create a new data store - select `Cloud Storage`
-5. At Data import, we will load a set of public PDFs using a JSON file:
+5. Create a new data store - select `Cloud Storage`
+6. Create a new bucket in Cloud Storage called alphabet-public
+7. Upload the alpha-metadata.json file in the root directory provided in this repository to the bucket root
+8. At Data import, we will load a set of public PDFs using a JSON file:
    1. Select `FILE`
    2. In the gs:// textbox, input `cymbalsearch-alphabet-public/metadata/metadata.json`
-   3. Select `JSON for unstructured documents with metadata`
+   3. Select `Linked unstructured documents (JSONL with metadata)`
    4. Click `CONTINUE`
-6. Give your data store a name and click `CREATE` (wait a few seconds for datastore to create)
-7. Select your newly-created data store and click `CREATE` to create app
-8. After around 10 minutes, the import status should show "Import completed".
-9. Congratulations! Play around with the app in the Preview and Configurations tabs in the console.
+9. Give your data store a name and click `CREATE` (wait a few seconds for datastore to create)
+10. Select your newly-created data store and click `CREATE` to create app
+11. After around 10 minutes, the import status should show "Import completed".
+12. Congratulations! Play around with the app in the Preview and Configurations tabs in the console.
 
 ### 3. Google Cloud Storage
 
 Create a bucket to be used for uploading of new documents using the UI.
 
-1. [Create a GCS bucket](https://cloud.google.com/storage/docs/creating-buckets#create_a_new_bucket) either in console or run this gcloud command in Cloud Shell:
+1. [Create a GCS bucket](https://cloud.google.com/storage/docs/creating-buckets#create_a_new_bucket) either in console or run this gcloud command in Cloud Shell after replacing the bucket name:
    ```
    export BUCKET_FOR_UPLOAD=$BUCKET_NAME
    ```
    ```
    gcloud storage buckets create gs://$BUCKET_FOR_UPLOAD
    ```
-1. [Configure CORS](https://cloud.google.com/storage/docs/cors-configurations#command-line) for your bucket.
+2. [Configure CORS](https://cloud.google.com/storage/docs/cors-configurations#command-line) for your bucket.
    ```
    echo '[{"origin": ["*"], "method": ["GET"], "responseHeader": ["Content-Type"],"maxAgeSeconds": 3600}]' > cors.json
    ```
@@ -134,16 +144,9 @@ export TAG=1.0
 
 ### 3. Enable APIs, create Service Account and push Docker image to Artifact Registry
 
-Firstly, ensure you are in the root directory of the repository.
+Firstly, ensure you are in the root directory of the repository, next, run the script below:
 
 ```
-cd cymbal-search/
-```
-
-Next, run the script below:
-
-```
-chmod +x deploy.sh
 ./deploy.sh
 ```
 
