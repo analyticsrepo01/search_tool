@@ -1,3 +1,5 @@
+PROJECT_ID=$(gcloud config get-value project)
+
 docker build --platform linux/amd64 -t search-demo-v4 . 
-docker tag search-demo-v4 us-docker.pkg.dev/account-pocs/cymbal-search-demo/search-demo-v4:latest
-docker push us-docker.pkg.dev/account-pocs/cymbal-search-demo/search-demo-v4:latest   
+docker tag search-demo-v4 us-docker.pkg.dev/$PROJECT_ID/cymbal-search-demo/search-demo-v4:latest
+docker push us-docker.pkg.dev/$PROJECT_ID/cymbal-search-demo/search-demo-v4:latest   
