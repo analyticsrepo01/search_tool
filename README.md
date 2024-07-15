@@ -47,7 +47,7 @@ You need to set up a Google Cloud Project with a Vertex AI Search app (unstructu
    git clone https://github.com/analyticsrepo01/search_tool.git
    ``` 
    ```
-   cd cymbal-search-demo-main
+   cd search_tool/
    ```
 
 ### 2. Vertex AI Search App
@@ -63,11 +63,11 @@ Create a Vertex AI Search with unstructured datastore with defined metadata.
    3. Set location as global
    4. Click `CONTINUE`
 5. Create a new data store - select `Cloud Storage`
-6. Create a new bucket in Cloud Storage called alphabet-public
+6. Create a new bucket in Cloud Storage called cymbalsearch-alphabet-public
 7. Upload the alpha-metadata.json file in the root directory provided in this repository to the bucket root
 8. At Data import, we will load a set of public PDFs using a JSON file:
    1. Select `FILE`
-   2. In the gs:// textbox, input `cymbalsearch-alphabet-public/metadata/metadata.json`
+   2. In the gs:// textbox, input `cymbalsearch-alphabet-public/alpha-metadata.json`
    3. Select `Linked unstructured documents (JSONL with metadata)`
    4. Click `CONTINUE`
 9. Give your data store a name and click `CREATE` (wait a few seconds for datastore to create)
@@ -111,11 +111,14 @@ git clone https://github.com/analyticsrepo01/search_tool.git
 
 Please replace these with your project details:
 
+- Replace BUCKET_NAME with your Cloud Storage Bucket Name
+- Replace VERTEX_AI_SEARCH_DATASTORE_ID with your Datastore ID (Can be found at Agent Builder > Data Stores)
+
 - Add `ENGINE_2` and `ENGINE_3` if you want more apps.
 - Leave `MODEL_1` and `MODEL_2` values unchanged if there are no changes to the PaLM models.
 
 ```
-export PROJECT_ID="PROJECT_ID"
+export PROJECT_ID=$(gcloud config get-value project)
 export BUCKET_FOR_UPLOAD="BUCKET_NAME"
 export ENGINE_1="VERTEX_AI_SEARCH_DATASTORE_ID"
 export MODEL_1="text-bison"
@@ -146,12 +149,17 @@ Firstly, ensure you are in the root directory of the repository, next, run the s
 ./deploy.sh
 ```
 
+If you face the following error: -bash: ./deploy.sh: Permission denied, run the following line:
+```
+sudo chmod +x deploy.sh
+```
+
 The `deploy.sh` script does the following:
 
 1. Enable required APIs (requires the `roles/servicemanagement.serviceConsumer` role).
-1. Create Service Account with required permissions (requires the `roles/iam.serviceAccountCreator` role).
-1. Create Artifact Repository (requires the `roles/artifactregistry.admin` role).
-1. Build image and push to Artifact Registry.
+2. Create Service Account with required permissions (requires the `roles/iam.serviceAccountCreator` role).
+3. Create Artifact Repository (requires the `roles/artifactregistry.admin` role).
+4. Build image and push to Artifact Registry.
 
 Visit the [Artifact Registry console](https://console.cloud.google.com/artifacts) to view your Docker image. It will take around 10 minutes for the build to complete.
 
