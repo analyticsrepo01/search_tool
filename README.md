@@ -112,7 +112,7 @@ git clone https://github.com/analyticsrepo01/search_tool.git
 Please replace these with your project details:
 
 - Replace BUCKET_NAME with your Cloud Storage Bucket Name
-- Replace VERTEX_AI_SEARCH_DATASTORE_ID with your Datastore ID (Can be found at Agent Builder > Data Stores)
+- Replace AGENT_BUILDER_APP_ID with your App ID (Can be found at Agent Builder > Apps > ID)
 
 - Add `ENGINE_2` and `ENGINE_3` if you want more apps.
 - Leave `MODEL_1` and `MODEL_2` values unchanged if there are no changes to the PaLM models.
@@ -120,8 +120,8 @@ Please replace these with your project details:
 ```
 export PROJECT_ID=$(gcloud config get-value project)
 export BUCKET_FOR_UPLOAD="BUCKET_NAME"
-export ENGINE_1="VERTEX_AI_SEARCH_DATASTORE_ID"
-export MODEL_1="text-bison"
+export ENGINE_1="AGENT_BUILDER_APP_ID"
+export MODEL_1="gemini-pro"
 export MODEL_2="text-bison-32k"
 ```
 
