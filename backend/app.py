@@ -113,6 +113,8 @@ def search():
         return jsonify(results)
     except Exception as e:
         app.logger.error("Error in /search: " + str(e))
+        print(f"An error occurred: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 """ Read doc from GCS """
