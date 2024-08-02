@@ -1,331 +1,609 @@
-from google.cloud import discoveryengine_v1beta as discoveryengine
-from google.cloud import resourcemanager_v3
-# from google.cloud import discoveryengine_v1alpha as discoveryengine
-from google.protobuf.json_format import MessageToDict
-from typing import List, Dict, Optional
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 import os
-from google.auth import default
-import requests
-import google.auth
-import google.auth.transport.requests
-  
+import logging
+
+from search import search_unstructured
+from gsutils import *
+from url_to_pdf import PdfGenerator
+from conversion import convert_url_to_pdf, convert_url_to_html
+from vertex import vertex_qa
+from datastore import *
+from conversations import converse_conversation, delete_conversation
+from conversationService import ConversationalSearchClient  # , ConversationService
 
 
-def search_unstructured(PROJECT_ID, data):
-    engine_id = data.get('engine_id')
-    page_token = data.get('page_token')
-    query = data.get('search_query')
-    page_size = data.get('page_size')
-    summary_result_count = data.get('summary_result_count')
-    max_snippet_count = data.get('max_snippet_count')
-    max_extractive_answer_count = data.get('max_extractive_answer_count')
-    max_extractive_segment_count = data.get('max_extractive_segment_count')
-    filter_id = data.get('filter_id')
-    # filter_facets = data.get('filter_facets')
-    filter_tenant = data.get('filter_tenant')
+PROJECT_ID = os.environ.get('PROJECT_ID')
+BUCKET_FOR_UPLOAD = os.environ.get('BUCKET_FOR_UPLOAD')
+ENGINE_1 = os.environ.get('ENGINE_1', '')
+ENGINE_2 = os.environ.get('ENGINE_2', '')
+ENGINE_3 = os.environ.get('ENGINE_3', '')
+ENGINE_4 = os.environ.get('ENGINE_4', '')
+MODEL_1 = os.environ.get('MODEL_1', 'gemini-pro')
+MODEL_2 = os.environ.get('MODEL_2', 'text-bison@002')
 
-    return search(
-        PROJECT_ID,
-        engine_id,
-        page_token,
-        query,
-        page_size,
-        summary_result_count,
-        max_snippet_count,
-        max_extractive_answer_count,
-        max_extractive_segment_count,
-        filter_id,
-        # filter_facets,
-        filter_tenant)
-
-def get_project_number(project_id) -> Optional[str]:
-    """Given a project id, return the project number"""
-    # Create a client
-    client = resourcemanager_v3.ProjectsClient()
-    # Initialize request argument(s)
-    request = resourcemanager_v3.SearchProjectsRequest(query=f"id:{project_id}")
-    # Make the request
-    page_result = client.search_projects(request=request)
-    # Handle the response
-    for response in page_result:
-        if response.project_id == project_id:
-            project = response.name
-            return project.replace('projects/', '')
+LOCATION = "global"
 
 
-def search(
-    project_id,
-    search_engine_id,
-    page_token: str,
-    search_query: str,
-    page_size: int,
-    summary_result_count: int,
-    max_snippet_count: int,
-    max_extractive_answer_count: int,
-    max_extractive_segment_count: int,
-    filter_id=List[str],
-    # filter_facets=Dict[str, List[str]],
-    filter_tenant=str,
+app = Flask(__name__, static_folder='build')
+CORS(app, resources={r"/*": {"origins": ["*"]}})
 
-    # facets=["category", "tenant"]
-):
+"""Set the log level and log format"""
+app.logger.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
 
-    # Create a client
-    # Modify the directory/path where you have the service account json file is stored
-    # os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "../key.json"
-    client = discoveryengine.SearchServiceClient()
+# app.logger.info('This is an info log.')
+# app.logger.warning('This is a warning log.')
+# app.logger.error('This is an error log.')
 
-    # Argolis Parameters
-    project_id = project_id
-    search_engine_id = search_engine_id
-    location = "global"
-    serving_config_id = "default_config"
-    search_query = search_query
-
-    # Config Path
-    serving_config = client.serving_config_path(
-        project=project_id,
-        location=location,
-        data_store=search_engine_id,
-        serving_config=serving_config_id,
-    )
-
-    # Content Search Spec
-    # https://cloud.google.com/generative-ai-app-builder/docs/snippets#segment-options
-    content_search_spec = {
-        'snippet_spec': {'return_snippet': True if max_snippet_count == 1 else False},
-        'extractive_content_spec': {
-            'max_extractive_answer_count': max_extractive_answer_count,
-            'max_extractive_segment_count': max_extractive_segment_count,
-            'return_extractive_segment_score': True,
-            # 'num_previous_segments': 3, # integer
-            # 'num_next_segments': 3 # integer
-        },
-        'summary_spec': {
-            'summary_result_count': summary_result_count,
-            'include_citations': True,
-            # 'ignore_adversarial_query': False,
-            # 'ignore_non_summary_seeking_query': False,
-            # 'language_code': 'id-ID' # 'th-TH' Use language tags defined by [BCP47][https://www.rfc-editor.org/rfc/bcp/bcp47.txt].
-            # 'model_prompt_spec': {
-            #     'preamble': 'translate to chinese'
-            # }
-        },
-    }
-
-    # Facets
-    # facets=[]
-    # facet_specs = []  # if empty, no facets are returned (max=100)
-    # for facet in facets:
-    #     facet_spec = {
-    #         "facet_key": {
-    #             "key": facet,
-    #             # "intervals": [], ## list of discoveryengine.types.Interval
-    #             # "restricted_values": [""], ## only get facet for these values
-    #             # "prefixes": [""],
-    #             # "contains": [""],
-    #             # "case_insensitive": True,
-    #             # "order_by": "count desc" ## order by SearchResponse.Facet.values.count descending
-    #             # "order_by": "values desc" ## order by SearchResponse.Facet.values.value descending
-    #         },
-    #         # Default=20, max facet values to be returned for this facet (max=300)
-    #         "limit": 20,
-    #         # "excluded_filter_keys": ["Anatomy"], ## MutableStr, list of keys to exclude when faceting (max 100 values)
-    #         # "enable_dynamic_position": True, ## Position of this facets among other facets is automatically determined
-    #         # enable_dynamic_position=False ## Position of this facet in the response will be the same as in the request, and it will be ranked before the facets with dynamic position enable
-    #     }
-    #     facet_specs.append(facet_spec)
-
-    # filter_parts = []
-    # if filter_facets:
-    #     category_filters = filter_facets.get('category', [])
-    #     if category_filters:
-    #         category_filter_string = "category: ANY(\"" + \
-    #             "\", \"".join(category_filters) + "\")"
-    #         filter_parts.append(category_filter_string)
-    #     tenant_filters = filter_facets.get('tenant', [])
-    #     if tenant_filters:
-    #         tenant_filter_string = "tenant: ANY(\"" + \
-    #             "\", \"".join(tenant_filters) + "\")"
-    #         filter_parts.append(tenant_filter_string)
-    # if filter_tenant:
-    #     filter_tenant_string = "tenant: ANY(\"" + filter_tenant + "\")"
-    #     filter_parts.append(filter_tenant_string)
-    # filter_string = " AND ".join(filter_parts)
-
-    # print("~ Filter ID: ", filter_id)
-    # print("~ Filter Facets: ", filter_facets)
-    # filter_parts = []
-    # if filter_id:
-    #     filter_id_string = "id: ANY(\"" + "\", \"".join(filter_id) + "\")"
-    #     filter_parts.append(filter_id_string)
-    # if filter_facets:
-    #     category_filters = filter_facets.get('category', [])
-    #     if category_filters:
-    #         category_filter_string = "category: ANY(\"" + \
-    #             "\", \"".join(category_filters) + "\")"
-    #         filter_parts.append(category_filter_string)
-    #     tenant_filters = filter_facets.get('tenant', [])
-    #     if tenant_filters:
-    #         tenant_filter_string = "tenant: ANY(\"" + \
-    #             "\", \"".join(tenant_filters) + "\")"
-    #         filter_parts.append(tenant_filter_string)
-    # if filter_tenant:
-    #     filter_tenant_string = "tenant: ANY(\"" + filter_tenant + "\")"
-    #     filter_parts.append(filter_tenant_string)
-    # filter_string = " AND ".join(filter_parts)
-    # print("~ Filter String: ",filter_string)
-
-    # Request
-    request = discoveryengine.SearchRequest(
-        serving_config=serving_config,
-        page_token=page_token,
-        query=search_query,
-        page_size=page_size,
-        content_search_spec=content_search_spec,
-        # facet_specs=facet_specs,
-        # filter=filter_string,  # Use the corrected filter string here
-    )
-
-    print("\nProject ID:", project_id)
-    
-    project_number = get_project_number(project_id)
-    
-    print("\nProject Number:", project_number)
-    
-    # Define the API endpoint URL with placeholders
-    search_url = f"https://discoveryengine.googleapis.com/v1alpha/projects/{project_number}/locations/global/collections/default_collection/engines/{search_engine_id}/servingConfigs/default_search:search"
-    answer_url = f"https://discoveryengine.googleapis.com/v1alpha/projects/{project_number}/locations/global/collections/default_collection/engines/{search_engine_id}/servingConfigs/default_search:answer"
-
-    query =  search_query
-    search_payload = {
-        "query": query,
-        "pageSize": 10,
-        "queryExpansionSpec": {"condition": "AUTO"},
-        "spellCorrectionSpec": {"mode": "AUTO"},
-        "contentSearchSpec": {
-            "summarySpec": {
-                "ignoreAdversarialQuery": True,
-                "includeCitations": True,
-                "summaryResultCount": 5,
-                "modelSpec": {"version": "gemini-1.0-pro-002/answer_gen/v1"}
-            },
-            "snippetSpec": {"returnSnippet": True},
-            "extractiveContentSpec": {"maxExtractiveAnswerCount": 1}
-        }
-    }
+""" Serve React App """
 
 
-    creds, project = google.auth.default()
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
-    auth_req = google.auth.transport.requests.Request()
-    creds.refresh(auth_req)
 
-    auth_token = creds.token
-    print("Auth Token:", creds.token)
+@app.errorhandler(404)
+def not_found(e):
+    return app.send_static_file('index.html')
 
-    # Set headers with authorization and content type
-    headers = {
-        "Authorization": f"Bearer {auth_token}",
-        "Content-Type": "application/json"
-    }
 
-    # Send the POST request
-    search_response = requests.post(search_url, headers=headers, json=search_payload)
-    
-    search_response_data = search_response.json()
-    
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
 
-    formatted_results = []
-    print(search_response_data)
-    results = search_response_data["results"]
-    numOfResults = len(results)
-    totalSize = search_response_data["totalSize"]
-    attributionToken = search_response_data["attributionToken"]
-    nextPageToken = search_response_data["nextPageToken"]
-    summary = search_response_data["summary"]["summaryText"]
 
-    # summary_skipped = response.summary.summary_skipped_reasons
-    # summary_skipped_reasons = []
-    # if summary_skipped:
-    #     # https://cloud.google.com/python/docs/reference/discoveryengine/latest/google.cloud.discoveryengine_v1beta.types.SearchResponse.Summary.SummarySkippedReason
-    #     SummarySkippedReason = {
-    #         0: "SUMMARY_SKIPPED_REASON_UNSPECIFIED",
-    #         1: "ADVERSARIAL_QUERY_IGNORED",
-    #         2: "NON_SUMMARY_SEEKING_QUERY_IGNORED",
-    #         3: "OUT_OF_DOMAIN_QUERY_IGNORED",
-    #         4: "POTENTIAL_POLICY_VIOLATION",
-    #         5: "LLM_ADDON_NOT_ENABLED"
-    #     }
-    #     for reason in summary_skipped:
-    #         summary_skipped_reasons.append(SummarySkippedReason[reason])
-    # safety_attributes = response.summary.safety_attributes
-    # safety_attributes_categories = [
-    #     cat for cat in safety_attributes.categories]
-    # safety_attributes_scores = [score for score in safety_attributes.scores]
+""" List Engines """
 
-    # corrected_query = response.corrected_query
-    # facets = response.facets
-    # facetDict = {}
-    # for facet in facets:
-    #     key = facet.key
-    #     values_dict = {value.value: value.count for value in facet.values}
-    #     facetDict[key] = values_dict
 
-    some_results = {
-        "numOfResults": numOfResults,
-        "totalSize": totalSize,
-        "token": attributionToken,
-        "nextPageToken": nextPageToken,
-        "summary": summary
-        # "summary_skipped_reasons": summary_skipped_reasons,
-        # "safety_attributes_categories": safety_attributes_categories,
-        # "safety_attributes_scores": safety_attributes_scores,
-        # "corrected_query": corrected_query,
-        # "facets": facetDict
-    }
+@app.route('/listEngines', methods=['GET'])
+def listEngines():
+    try:
+        engines = []
+        if ENGINE_1 == '':
+            raise ValueError(
+                "ENGINE_1 is not specified in Environment Variable!")
+        else:
+            engines.append(ENGINE_1)
+        if ENGINE_2 != '':
+            engines.append(ENGINE_2)
+        if ENGINE_3 != '':
+            engines.append(ENGINE_3)
+        return jsonify(engines)
+    except Exception as e:
+        app.logger.error("Error in /listEngines:  " + str(e))
+        return jsonify({"error": str(e)}), 500
 
-    formatted_results.append(some_results)
 
-    for result in results:
-        # data = MessageToDict(result.document._pb)
+""" List Models """
 
-        data = result
 
-        formatted_result = {}
-        formatted_result['id'] = data.get('document',{}).get('id', {})
-        formatted_result['name'] = data.get('document',{}).get('name', {})
-        formatted_result['filter_category'] = data.get('document',{}).get(
-            'structData', {}).get('category', {})
-        formatted_result['filter_id'] = data.get('document',{}).get(
-            'structData', {}).get('id', {})
-        formatted_result['filter_name'] = data.get('document',{}).get(
-            'structData', {}).get('name', {})
-        formatted_result['filter_tenant'] = data.get('document',{}).get(
-            'structData', {}).get('tenant', {})
-        # formatted_result['filter_summary_brief'] = data.get('document',{}).get(
-        #     'structData', {}).get('summary_brief', {})
-        # formatted_result['filter_summary_comprehensive'] = data.get(
-        #     'structData', {}).get('summary_comprehensive', {})
-        # formatted_result['filter_num_pages'] = data.get(
-        #     'structData', {}).get('num_pages', {})
-        # formatted_result['filter_created_time'] = data.get(
-        #     'structData', {}).get('created_time', {})
+@app.route('/listModels', methods=['GET'])
+def listModels():
+    try:
+        models = []
+        models.append(MODEL_1)
+        models.append(MODEL_2)
+        return jsonify(models)
+    except Exception as e:
+        app.logger.error("Error in /listModels:  " + str(e))
+        return jsonify({"error": str(e)}), 500
 
-        formatted_result['snippets'] = [d.get('snippet') for d in data.get('document',{}).get(
-            'derivedStructData', {}).get('snippets', []) if d.get('snippet') is not None]
-        formatted_result['uri_link'] = data.get('document',{}).get(
-            'derivedStructData', {}).get('link', {})
-        formatted_result['extractive_answers_content'] = [d.get('content') for d in data.get('document',{}).get(
-            'derivedStructData', {}).get('extractive_answers', []) if d.get('content') is not None]
-        formatted_result['extractive_answers_pageNumber'] = [d.get('pageNumber') for d in data.get('document',{}).get(
-            'derivedStructData', {}).get('extractive_answers', []) if d.get('pageNumber') is not None]
-        formatted_result['extractive_segments'] = [d.get('content') for d in data.get('document',{}).get(
-            'derivedStructData', {}).get('extractive_segments', []) if d.get('content') is not None]
-        formatted_result['extractive_segments_pageNumber'] = [d.get('pageNumber') for d in data.get(
-            'derivedStructData', {}).get('extractive_segments', []) if d.get('pageNumber') is not None]
-        
-        formatted_results.append(formatted_result)
 
-    # print("~ Formatted Results:\n",formatted_results)
-    return formatted_results
+""" Search """
+
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json()
+    try:
+        results = search_unstructured(PROJECT_ID, data)
+        return results
+    except Exception as e:
+        app.logger.error("Error in /search: " + str(e))
+        print(f"An error occurred: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+""" Read doc from GCS """
+
+
+@app.route('/read', methods=['POST'])
+def read():
+    data = request.get_json()
+    try:
+        results = getpdf(data.get('uriLink'))
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error("Error /read: " + str(e))
+
+
+""" Upload Single File to GCS """
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    file = request.files["file"]
+    formData = request.form
+    try:
+        metadata, errors = uploadpdf(
+            PROJECT_ID,
+            BUCKET_FOR_UPLOAD,
+            file,
+            formData,
+        )
+        app.logger.info(f'~ Metadata Created: {str(metadata)}')
+        if errors:
+            app.logger.info(f'~ Errors: {str(errors)}')
+        return jsonify(status="success")
+    except Exception as e:
+        app.logger.error("Error in /upload: " + str(e))
+        return jsonify(status="error", message="Error uploading file to GCS: " + str(e))
+
+
+""" Convert URL to PDF """
+
+
+@app.route('/convert', methods=['POST'])
+def convert_urls_to_pdf():
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        if not url:
+            return jsonify(error='No URLs provided'), 400
+
+        # Using Pdfkit
+        pdf_content = convert_url_to_pdf(url)
+
+        # Upload the PDF content to GCS
+        bucket_name = BUCKET_FOR_UPLOAD
+        mimeType = "application/pdf"
+        gcsDocUrl = write_to_gcs(bucket_name, pdf_content, mimeType)
+
+        return jsonify(gcs_link=gcsDocUrl), 200
+
+    except Exception as e:
+        app.logger.error("Error in /convert: " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Convert Using PDF Generator """
+
+
+@app.route('/pdfgenerator', methods=['POST'])
+def pdfgenerator():
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        if not url:
+            return jsonify(error='No URLs provided'), 400
+
+        # Using PdfGenerator
+        pdf_file = PdfGenerator([url]).main()
+        pdf_content = pdf_file[0].getbuffer().tobytes()
+        print("pdf_content", pdf_content)
+
+        # # Using Pdfkit
+        # pdf_content = convert_url_to_pdf(url)
+
+        # Upload the PDF content to GCS
+        bucket_name = BUCKET_FOR_UPLOAD
+        mimeType = "application/pdf"
+        gcsDocUrl = write_to_gcs(bucket_name, pdf_content, mimeType)
+
+        return jsonify(gcs_link=gcsDocUrl), 200
+
+    except Exception as e:
+        app.logger.error("Error in /convert: " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Upload Converted PDF to ES """
+
+
+@app.route('/uploadConverted', methods=['POST'])
+def import_converted_to_ES():
+    try:
+        formData = request.form
+        engineId = formData.get("engine_id")
+        metadata, filename = create_json_converted(
+            formData)  # Create JSON file
+        app.logger.info('~ Metadata Created:', str(metadata))
+        gcs_json_url = create_upload_json(
+            BUCKET_FOR_UPLOAD, metadata, filename)  # Upload JSON to bucket
+
+        # Upload JSON from GCS to ES
+        if not gcs_json_url:
+            return jsonify(error='No URLs provided'), 400
+        app.logger.info("~ Upload to Search Engine Datastore...")
+        import_documents(
+            project_id=PROJECT_ID,
+            location=LOCATION,
+            search_engine_id=engineId,
+            gcs_uri=gcs_json_url,
+        )
+        app.logger.info("~ Uploaded to ES!!!")
+        return jsonify(status="success"), 200
+
+    except Exception as e:
+        app.logger.error("Error in /uploadConverted:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Convert URL to HTML """
+
+
+@app.route('/convertHTML', methods=['POST'])
+def convert_urls_to_html():
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        if not url:
+            return jsonify(error='No URLs provided'), 400
+
+        html_content = convert_url_to_html(url)
+        print(html_content)
+
+        # Upload the HTML to GCS
+        bucket_name = BUCKET_FOR_UPLOAD
+        mimeType = "text/html"
+        gcsDocUrl = write_to_gcs(bucket_name, html_content, mimeType)
+        print("GCS URL: ", gcsDocUrl)
+        return jsonify(gcs_link=gcsDocUrl), 200
+
+    except Exception as e:
+        app.logger.error("Error in /convertHTML:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Bulk Import using JSON """
+
+
+@app.route('/bulk_import_json', methods=["POST"])
+def bulk_import_json():
+    try:
+        data = request.get_json()
+        engineId = data.get('engine_id')
+        metadataList = data.get('metadata_list')
+        res = bulk_upload_json(engineId, metadataList)
+        if res == 'ok':
+            return jsonify(status="success"), 200
+        else:
+            app.logger.error("Error:  " + res)
+            return jsonify({"error": res}), 500
+    except Exception as e:
+        app.logger.error("Error in /bulk_import_json:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Bulk Import using CSV """
+
+
+@app.route('/bulk_import_csv', methods=["POST"])
+def bulk_import_csv():
+    try:
+        engineId = request.form.get("engine_id")
+        file = request.files["file"]
+        res = bulk_upload_csv(engineId, file)
+        if res == 'ok':
+            return jsonify(status="success"), 200
+        else:
+            app.logger.error("Error:  " + res)
+            return jsonify({"error": res}), 500
+    except Exception as e:
+        app.logger.error("Error in /bulk_import_csv:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Call Vertex AI to obtain Summary """
+
+
+@app.route('/regenerate', methods=['POST'])
+def regenerate():
+    data = request.get_json()
+    llmModel = data.get('llmModel')
+    query = data.get('query')
+    summary = data.get('summary')
+    checkedItems = data.get('checkedItems')
+    searchResults = data.get('searchResults')
+    userInput = data.get('userInput')
+    temperature = data.get('temperature')
+    topK = data.get('topK')
+    topP = data.get('topP')
+    try:
+        results = vertex_qa(
+            llmModel,
+            query,
+            summary,
+            checkedItems,
+            searchResults,
+            userInput,
+
+            temperature,
+            topK,
+            topP
+        )
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error("Error in /regenerate:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" List Indexed Documents in Datastore """
+
+
+@app.route('/listDocuments', methods=['POST'])
+def listDocs():
+    try:
+        data = request.get_json()
+        docs = list_documents(PROJECT_ID, LOCATION, data.get("engine_id"))
+        results = list_details(docs)
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error("Error in /listDocuments:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" List Metadata in Datastore """
+
+
+@app.route('/listMetadata', methods=['POST'])
+def listMetadata():
+    try:
+        data = request.get_json()
+        docs = list_documents(PROJECT_ID, LOCATION, data.get("engine_id"))
+        tenants = list_tenants(docs)
+        categories = list_categories(docs)
+        res = []
+        res.append(tenants)
+        res.append(categories)
+
+        return jsonify(res)
+    except Exception as e:
+        app.logger.error("Error in /listMetadata:  " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+""" Get Document """
+
+
+@app.route('/getDocument', methods=['GET'])
+def getDoc():
+    data = request.get_json()
+    docName = data.get('llmModel')
+    response, status = sample_get_document(docName)
+    if status == 200:
+        return jsonify(response), status
+    else:
+        app.logger.error("Error in /getDocument:  " + str(response))
+        return jsonify({"error": str(response)}), 500
+
+
+""" Purge Datastore """
+
+
+@app.route('/purge', methods=['POST'])
+def purgeDocs():
+    try:
+        data = request.get_json()
+        datastore_id = data.get("engine_id")
+        parent_value = f"""projects/{PROJECT_ID}/locations/{
+            LOCATION}/collections/default_collection/dataStores/{datastore_id}/branches/0"""
+        sample_purge_documents(parent_value, "*")
+        return jsonify(status='success'), 200
+    except Exception as e:
+        app.logger.error("Error in /purge:  " + str(e))
+        return jsonify(error=str(e)), 500
+
+
+""" Delete List of Documents """
+
+
+@app.route('/deleteDocs', methods=['POST'])
+def deleteDocs():
+    data = request.get_json()
+    docNameList = data.get('documents')
+    errors = []
+    for docName in docNameList:
+        try:
+            sample_delete_document(docName)
+        except Exception as e:
+            errors.append(str(e))
+            continue
+    if len(errors) != 0:
+        return jsonify(status='success', errors=errors), 200
+    else:
+        return jsonify(status='success'), 200
+
+
+""" Send Email Helper Function"""
+
+FROM_EMAIL = 'demo.for.genai@gmail.com'
+SEND_EMAIL = 'elroylbj@google.com'
+APP_PASSWORD = 'tkvp inyt lams cyfq'
+
+
+def send_email(subject, contents):
+    msg = MIMEMultipart()
+
+    msg['From'] = FROM_EMAIL
+    msg['To'] = SEND_EMAIL
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(contents, 'plain'))
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(FROM_EMAIL, APP_PASSWORD)
+    text = msg.as_string()
+    server.sendmail(FROM_EMAIL, SEND_EMAIL, text)
+    server.quit()
+
+    return True
+
+
+""" Register Interest created by darrenchew@google.com """
+
+
+@app.route('/registerEmail', methods=['POST'])
+def register_email():
+    try:
+        data = request.json
+        email = data.get('email')
+        if not email:
+            return jsonify({"error": "Email address not provided."}), 400
+        else:
+            subject = "[Cymbalsearch] Register Interest"
+            contents = email
+            send_email(subject, contents)
+
+            logging.info('Email sent successfully.')
+            return jsonify({"message": "Interest has been registered."}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+""" Send feedback to email from Contact Page"""
+
+
+@app.route('/sendEmail', methods=['POST'])
+def send_feedback():
+    try:
+        formData = request.get_json()
+        name = formData.get("name")
+        # country = formData.get("country")
+        companyName = formData.get("companyName")
+        companyEmail = formData.get("companyEmail")
+        mobileNumber = formData.get("mobileNumber")
+
+        subject = "[Cymbalsearch] Register Interest"
+        new_line = '\n'
+        contents = f"""Name: {name}{new_line}Company: {companyName}{
+            new_line}Email: {companyEmail}{new_line}Contact: {mobileNumber}"""
+        send_email(subject, contents)
+
+        logging.info('Email sent successfully.')
+        return jsonify({"message": "Interest has been registered."}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+""" Start a New Conversation """
+
+
+@app.route('/start_convo', methods=['POST'])
+def start_convo():
+    data = request.get_json()
+    datastore_id = data.get("engine_id")
+    user_input = data.get("user_input")
+    parent_value = f"""projects/{PROJECT_ID}/locations/{
+        LOCATION}/collections/default_collection/dataStores/{datastore_id}"""
+    print('parent_value:', parent_value)
+    print('user_input:', user_input)
+    try:
+        results = converse_conversation(
+            parent_value + "/conversations/-", user_input)
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error("Error in /start_convo: " + str(e))
+
+
+""" Continue a Conversation """
+
+
+@app.route('/continue_convo', methods=['POST'])
+def continue_convo():
+    data = request.get_json()
+    conversation_name = data.get("conversation_name")
+    user_input = data.get("user_input")
+    datastore_id = data.get("engine_id")
+    print('engine_id:', datastore_id)
+    try:
+        # New convo at chatbot
+        if conversation_name == "":
+            conversation_name = f"""projects/{PROJECT_ID}/locations/{
+                LOCATION}/collections/default_collection/dataStores/{datastore_id}/conversations/-"""
+        print('conversation_name:', conversation_name)
+        print('user_input:', user_input)
+        results = converse_conversation(conversation_name, user_input)
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error("Error in /continue_convo: " + str(e))
+
+
+""" List all Conversations """
+
+
+@app.route('/list_convo', methods=['POST'])
+def list_convo():
+    data = request.get_json()
+    datastore_id = data.get("engine_id")
+    parent_value = f"""projects/{PROJECT_ID}/locations/{
+        LOCATION}/collections/default_collection/dataStores/{datastore_id}"""
+    try:
+        client = ConversationalSearchClient(parent_value)
+        client.list_conversations()
+        return jsonify(client.conversations)
+    except Exception as e:
+        app.logger.error("Error in /list_convo: " + str(e))
+
+
+""" Delete Conversations """
+
+
+@app.route('/delete_convos', methods=["POST"])
+def delete_convos():
+    data = request.get_json()
+    convo_names = data.get("conversations")
+    print("convo_names:", convo_names)
+    try:
+        for convo_name in convo_names:
+            print("Convo Name: ", convo_name)
+            delete_conversation(convo_name)
+        return "", 200
+    except Exception as e:
+        app.logger.error("Error in /list_convo: " + str(e))
+
+# """ Get Conversation """
+# @app.route('/get_convo', methods=['POST'])
+# def list_convo():
+#     data = request.get_json()
+#     conversation_name = data.get("conversation_name")
+#     datastore_id = data.get("engine_id")
+#     parent_value = f"projects/{PROJECT_ID}/locations/{LOCATION}/collections/default_collection/dataStores/{datastore_id}"
+#     try:
+#         client = ConversationalSearchClient(parent_value)
+#         conversation = ConversationService(client, conversation_name=conversation_name)
+#         return jsonify(client.conversations)
+#     except Exception as e:
+#         app.logger.error("Error in /list_convo: " + str(e))
+
+# """ Update a Conversation """
+# @app.route('/update_convo', methods=['POST'])
+# def update_convo():
+#     data = request.get_json()
+#     conversation = data.get("conversation")
+#     new_state = data.get("new_state")
+#     new_user_pseudo_id = data.get("new_user_pseudo_id")
+#     try:
+#         updated_convo = update_conversation(conversation, new_state, new_user_pseudo_id)
+#         return jsonify(updated_convo)
+#     except Exception as e:
+#         app.logger.error("Error in /update_convo: " + str(e))
+
+
+if __name__ == '__main__':
+    app.run(use_reloader=True, port=8000, threaded=True)
