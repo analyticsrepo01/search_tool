@@ -1,11 +1,11 @@
-import Facets from "./Facets";
+// import Facets from "./Facets";
 import Filters from "./Filters";
 import Configurations from "./Configurations";
 
 const Sidebar = ({
-  facetsData,
-  setFacetsData,
-  isSearchReset,
+  // facetsData,
+  // setFacetsData,
+  // isSearchReset,
   
   pageSize,
   setPageSize,
@@ -25,11 +25,11 @@ const Sidebar = ({
 
   return (
     <div>
-      <Facets
-        facetsData={facetsData}
-        onFacetsChange={onFacetsChange}
-        isSearchReset={isSearchReset}
-      />
+      // <Facets
+      //   facetsData={facetsData}
+      //   onFacetsChange={onFacetsChange}
+      //   isSearchReset={isSearchReset}
+      // />
       <Filters
         tenant={tenant}
         setTenant={setTenant}
