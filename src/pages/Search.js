@@ -13,6 +13,8 @@ import SearchResults from "../search/SearchResults";
 import Followup from "../chat/Followup";
 import config from "../config";
 
+//VERSION 41
+
 const Search = ({ engine, setEngine, setEngines }) => {
   // Status Messages
   const [errorMessage, setErrorMessage] = useState("");
@@ -45,10 +47,10 @@ Question: {{query}}
 Answer: `;
   const [userInput, setUserInput] = useState(defaultUserInput);
   // Facets
-  const [facetsData, setFacetsData] = useState({});
-  const [facetChecklist, setFacetChecklist] = useState({});
-  const [isFacetClicked, setIsFacetClicked] = useState(false);
-  const [isSearchReset, setIsSearchReset] = useState(false);
+  // const [facetsData, setFacetsData] = useState({});
+  // const [facetChecklist, setFacetChecklist] = useState({});
+  // const [isFacetClicked, setIsFacetClicked] = useState(false);
+  // const [isSearchReset, setIsSearchReset] = useState(false);
   // Results
   const [searchResults, setSearchResults] = useState([]);
   const [checkedItems, setCheckedItems] = useState([]);
@@ -177,38 +179,38 @@ Answer: `;
     }
   };
 
-  // Handle Facets Checkbox Change
-  const handleFacetsChange = (facet, isChecked, category) => {
-    // console.log(`Facet ${facet} is ${isChecked ? "checked" : "unchecked"}`);
-    if (isChecked) {
-      setFacetChecklist((prevFacetChecklist) => {
-        const updatedFacetChecklist = { ...prevFacetChecklist };
-        updatedFacetChecklist[category] = [
-          ...prevFacetChecklist[category],
-          facet,
-        ];
-        return updatedFacetChecklist;
-      });
-    } else {
-      setFacetChecklist((prevFacetChecklist) => {
-        const updatedFacetChecklist = { ...prevFacetChecklist };
-        updatedFacetChecklist[category] = prevFacetChecklist[category].filter(
-          (item) => item !== facet
-        );
-        return updatedFacetChecklist;
-      });
-    }
-    setIsFacetClicked(true);
-  };
+  // // Handle Facets Checkbox Change
+  // const handleFacetsChange = (facet, isChecked, category) => {
+  //   // console.log(`Facet ${facet} is ${isChecked ? "checked" : "unchecked"}`);
+  //   if (isChecked) {
+  //     setFacetChecklist((prevFacetChecklist) => {
+  //       const updatedFacetChecklist = { ...prevFacetChecklist };
+  //       updatedFacetChecklist[category] = [
+  //         ...prevFacetChecklist[category],
+  //         facet,
+  //       ];
+  //       return updatedFacetChecklist;
+  //     });
+  //   } else {
+  //     setFacetChecklist((prevFacetChecklist) => {
+  //       const updatedFacetChecklist = { ...prevFacetChecklist };
+  //       updatedFacetChecklist[category] = prevFacetChecklist[category].filter(
+  //         (item) => item !== facet
+  //       );
+  //       return updatedFacetChecklist;
+  //     });
+  //   }
+  //   setIsFacetClicked(true);
+  // };
 
   // Call /search API when facets checkbox change
-  useEffect(() => {
-    if (isFacetClicked) {
-      handleSearch(query, 2);
-      setIsFacetClicked(false);
-    }
-    // eslint-disable-next-line
-  }, [isFacetClicked]);
+  // useEffect(() => {
+  //   if (isFacetClicked) {
+  //     handleSearch(query, 2);
+  //     setIsFacetClicked(false);
+  //   }
+  //   // eslint-disable-next-line
+  // }, [isFacetClicked]);
 
   /* 
     searchState
@@ -234,11 +236,11 @@ Answer: `;
         searchState === 1 ? checkedItems.map((item) => item.id) : []; // use checkedItems only for Regenerate
 
       // Fresh Search, reset facets, facets checked, LLMmodel
-      const facetList = searchState === 0 ? [] : facetChecklist;
-      if (searchState === 0) {
-        setFacetChecklist({ category: [], tenant: [] });
-        setIsSearchReset(true);
-      }
+      // const facetList = searchState === 0 ? [] : facetChecklist;
+      // if (searchState === 0) {
+      //   // setFacetChecklist({ category: [], tenant: [] });
+      //   setIsSearchReset(true);
+      // }
 
       const request = {
         engine_id: engine,
@@ -251,7 +253,7 @@ Answer: `;
         max_extractive_answer_count: numAnswers,
         max_extractive_segment_count: numSegments,
         filter_id: idList,
-        filter_facets: facetList,
+        // filter_facets: facetList,
         filter_tenant: tenant,
 
         // searchState: searchState,
@@ -276,6 +278,7 @@ Answer: `;
       const requestJson = JSON.stringify(request);
       // setReusableString(requestJson);
 
+      // THIS PART
       const response = await fetch(`${config.LOCALHOST}/search`, {
         method: "POST",
         headers: {
@@ -286,15 +289,18 @@ Answer: `;
 
       const data = await response.json();
       console.log("response:", data);
+      // THIS PART
+
+
 
       // Set Summary, Query
       setSummary(
-        data[0].summary === "" ? "No Summary Generated." : data[0].summary
+        data[0]['summary'] === "" ? "No Summary Generated." : data[0]['summary']
       );
       setOriginalQuery(query);
-      setQuery(
-        data[0].corrected_query !== "" ? data[0].corrected_query : query
-      );
+      // setQuery(
+      //   data[0].corrected_query !== "" ? data[0].corrected_query : query
+      // );
 
       // Set Results and Checked Results if New Search and Facets Search
       if (searchState !== 1) {
@@ -307,25 +313,25 @@ Answer: `;
         setPrevRequest(request);
         setFetchedPages([]);
         setFetchedPages((prevPages) => [...prevPages, data]);
-        setNextPageToken(data[0].nextPageToken);
+        setNextPageToken(data[0]['nextPageToken']);
         // console.log("nextPageToken:", data[0].nextPageToken);
       }
 
       // Set Facets only if New Search
-      if (searchState === 0) {
-        setFacetsData(data[0].facets);
-        setIsSearchReset(false);
-        // Get LLM Summary if llm not "es"
-        if (llmModel !== "es") {
-          await regenerateNewModel(llmModel, query, data);
-        }
-      }
+      // if (searchState === 0) {
+      //   setFacetsData(data[0].facets);
+      //   setIsSearchReset(false);
+      //   // Get LLM Summary if llm not "es"
+      //   if (llmModel !== "es") {
+      //     await regenerateNewModel(llmModel, query, data);
+      //   }
+      // }
       setIsLoading(false);
       setIsLoadingRegenerate(false);
     } catch (error) {
       setErrorMessage("" + error);
       setIsLoading(false);
-      setIsSearchReset(false);
+      // setIsSearchReset(false);
       setIsLoadingRegenerate(false);
     }
   };
@@ -355,7 +361,7 @@ Answer: `;
       const request = {
         llmModel: llmModel,
         query: query,
-        summary: searchResults[0].summary,
+        summary: searchResults[0]['summary'],
         checkedItems: checkedItems,
         // resultDetails: searchResults[0],
         searchResults: searchResults.slice(1),
@@ -407,7 +413,7 @@ Answer: `;
       console.log("Next Page Request:", prevRequest);
       console.log("Next Page Response:", data);
       setSearchResults(data);
-      setNextPageToken(data[0].nextPageToken);
+      setNextPageToken(data[0]['nextPageToken']);
       setFetchedPages((prevPages) => [...prevPages, data]);
       setIsLoading(false);
     } catch (error) {
@@ -470,10 +476,10 @@ Answer: `;
           {isSidebarExpanded && (
             <div className="col-3 sidebar-wrapper">
               <Sidebar
-                facetsData={facetsData}
-                setFacetsData={setFacetsData}
-                onFacetsChange={handleFacetsChange}
-                isSearchReset={isSearchReset}
+                // facetsData={facetsData}
+                // setFacetsData={setFacetsData}
+                // onFacetsChange={handleFacetsChange}
+                // isSearchReset={isSearchReset}
                 numSnippets={numSnippets}
                 setNumSnippets={setNumSnippets}
                 numAnswers={numAnswers}
