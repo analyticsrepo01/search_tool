@@ -241,9 +241,9 @@ def search(
     results = search_response_data["results"]
     numOfResults = len(results)
     totalSize = search_response_data["totalSize"]
-    attributionToken = search_response_data["attributionToken"]
-    nextPageToken = search_response_data["nextPageToken"]
-    summary = search_response_data["summary"]["summaryText"]
+    nextPageToken = search_response_data.get("nextPageToken", "")
+    attributionToken = search_response_data.get("attributionToken","")
+    summary = search_response_data.get("summary","").get("summaryText","")
 
     # summary_skipped = response.summary.summary_skipped_reasons
     # summary_skipped_reasons = []
