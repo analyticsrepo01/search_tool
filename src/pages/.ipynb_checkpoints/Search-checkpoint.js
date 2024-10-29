@@ -49,7 +49,7 @@ Answer: `;
   const [facetChecklist, setFacetChecklist] = useState({});
   const [isFacetClicked, setIsFacetClicked] = useState(false);
   const [isSearchReset, setIsSearchReset] = useState(false);
-  // Results
+  Results
   const [searchResults, setSearchResults] = useState([]);
   const [checkedItems, setCheckedItems] = useState([]);
   // Pagination
